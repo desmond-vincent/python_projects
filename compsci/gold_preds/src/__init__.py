@@ -27,8 +27,8 @@ def run():
 
     # RSI
     delta = df['Close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    gain  = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss  = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     df['RSI_14'] = 100 - (100 / (1 + (gain / (loss + 1e-9))))
 
     # MACD
@@ -38,35 +38,33 @@ def run():
 
     # Bollinger Band Width and Volatility
     df['BB_Width'] = (4 * df['Close'].rolling(window=20).std()) / df['Close'].rolling(window=20).mean()
-    df['Vol_10'] = df['Log_Return'].rolling(window=10).std()
+    df['Vol_10']   = df['Log_Return'].rolling(window=10).std()
 
-    # Target
+    # Target — next day log return
     df['Target'] = df['Log_Return'].shift(-1)
 
-    # Store full history before dropping rows
+    # Store full price history for visualization
     full_history = df['Close'].copy()
 
     df.dropna(inplace=True)
 
     # ── Drop raw OHLCV to prevent leakage ───────────────────
-    df.drop(columns=['Open', 'High', 'Low', 'Volume'], inplace=True)
-
     close_prices = df['Close']
+    df.drop(columns=['Open', 'High', 'Low', 'Volume', 'Close'], inplace=True)
 
     # ── Section 3: Train/Test Split & Scaling ───────────────
-    features = [col for col in df.columns if col not in ['Target', 'Close']]
+    features = [col for col in df.columns if col != 'Target']
 
     X, y = df[features], df['Target']
 
-    split_idx = int(len(df) * 0.80)
-
+    split_idx   = int(len(df) * 0.80)
     X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
     y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
-    prices_test = close_prices.iloc[split_idx:]
+    prices_test     = close_prices.iloc[split_idx:]
 
-    scaler = RobustScaler()
+    scaler    = RobustScaler()
     X_train_s = scaler.fit_transform(X_train)
-    X_test_s = scaler.transform(X_test)
+    X_test_s  = scaler.transform(X_test)
 
     print(f"Training samples: {len(X_train)}")
     print(f"Testing samples:  {len(X_test)}")
@@ -80,24 +78,45 @@ def run():
     lr.fit(X_train_s, y_train)
     lr_ret_preds = lr.predict(X_test_s)
 
-    # ── Section 5: Price Reconstruction & Metrics ──────────
-    rf_price_preds = prices_test.values * np.exp(rf_ret_preds)
-    lr_price_preds = prices_test.values * np.exp(lr_ret_preds)
-    actual_prices = prices_test.values * np.exp(y_test.values)
+    # ── Section 5: Dual Evaluation ──────────────────────────
+    # PRIMARY: Return-domain metrics (honest evaluation)
+    # Log return predictions are evaluated directly against actual log returns.
+    # R2 near zero or negative is the expected Efficient Market result for
+    # daily gold returns and does NOT indicate model failure.
 
-    # Calculate metrics and store them
-    metrics = {}
+    return_metrics = {}
+    print(f"\n--- PRIMARY EVALUATION: Return Domain (Honest) ---")
+    print(f"{'Model':<20} | {'MAE':<12} | {'RMSE':<12} | {'R2 Score':<10}")
+    print("-" * 65)
+    for name, ret_pred in [("Random Forest", rf_ret_preds), ("Linear Regression", lr_ret_preds)]:
+        mae  = mean_absolute_error(y_test, ret_pred)
+        rmse = np.sqrt(mean_squared_error(y_test, ret_pred))
+        r2   = r2_score(y_test, ret_pred)
+        return_metrics[name] = {'MAE': mae, 'RMSE': rmse, 'R2': r2}
+        print(f"{name:<20} | {mae:<12.6f} | {rmse:<12.6f} | {r2:<10.4f}")
+
+    # SECONDARY: Price-domain metrics (visualization context only)
+    # WARNING: Price R2 is inflated by persistence bias. Because daily returns
+    # are tiny (~0.5%), multiplying today's price by exp(return) produces a
+    # prediction nearly identical to today's price regardless of model quality.
+    # The price variance "swallows" the model's return prediction errors.
+    # Use price metrics for chart context only — NOT as primary evaluation.
+
+    price_metrics = {}
+    rf_price_preds  = prices_test.values * np.exp(rf_ret_preds)
+    lr_price_preds  = prices_test.values * np.exp(lr_ret_preds)
+    actual_prices   = prices_test.values * np.exp(y_test.values)
+
+    print(f"\n--- SECONDARY EVALUATION: Price Domain (Visualization Context Only) ---")
+    print(f"NOTE: Price R2 is inflated by persistence bias. See return metrics above.")
+    print(f"{'Model':<20} | {'MAE (USD)':<12} | {'RMSE (USD)':<12} | {'R2 Score':<10}")
+    print("-" * 65)
     for name, pred in [("Random Forest", rf_price_preds), ("Linear Regression", lr_price_preds)]:
-        mae = mean_absolute_error(actual_prices, pred)
+        mae  = mean_absolute_error(actual_prices, pred)
         rmse = np.sqrt(mean_squared_error(actual_prices, pred))
-        r2 = r2_score(actual_prices, pred)
-        metrics[name] = {'MAE': mae, 'RMSE': rmse, 'R2': r2}
-
-    print(f"\n{'Model':<20} | {'MAE':<10} | {'RMSE':<10} | {'R² Score':<10}")
-    print("-" * 60)
-
-    for name, m in metrics.items():
-        print(f"{name:<20} | ${m['MAE']:>8.2f} | ${m['RMSE']:>8.2f} | {m['R2']:>9.4f}")
+        r2   = r2_score(actual_prices, pred)
+        price_metrics[name] = {'MAE': mae, 'RMSE': rmse, 'R2': r2}
+        print(f"{name:<20} | ${mae:<11.2f} | ${rmse:<11.2f} | {r2:<10.4f}")
 
     # ── Section 6: Visualization ────────────────────────────
     sns.set_theme(style="whitegrid")
@@ -111,36 +130,34 @@ def run():
     ax1.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
     ax1.legend()
 
-    # Plot 2: 120-Day Zoom with Metrics
+    # Plot 2: 120-Day Zoom
     zoom = -120
-    ax2.plot(actual_prices[zoom:], label='Actual Price', color='black', linewidth=2)
-    ax2.plot(rf_price_preds[zoom:], label='RF Predicted', color='gold', linestyle='--')
-    ax2.plot(lr_price_preds[zoom:], label='LR Predicted', color='steelblue', linestyle=':')
-    ax2.set_title('Model Performance Zoom (Recent 120 Days)', fontsize=14)
+    ax2.plot(actual_prices[zoom:],   label='Actual Price', color='black',     linewidth=2)
+    ax2.plot(rf_price_preds[zoom:],  label='RF Predicted', color='gold',      linestyle='--')
+    ax2.plot(lr_price_preds[zoom:],  label='LR Predicted', color='steelblue', linestyle=':')
+    ax2.set_title('Model Performance Zoom — Recent 120 Days (Price Reconstruction)', fontsize=14)
     ax2.set_ylabel('Price (USD)')
     ax2.set_xlabel('Trading Days')
     ax2.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d'))
     ax2.legend(loc='upper left')
 
-    # Add metrics text box - FIXED formatting
-    rf_m = metrics['Random Forest']
-    lr_m = metrics['Linear Regression']
-
+    # Metrics text box — return domain only
+    rf_r  = return_metrics['Random Forest']
+    lr_r  = return_metrics['Linear Regression']
     metrics_text = (
+        f"Return Domain Metrics (Primary)\n"
+        f"--------------------------------\n"
         f"Random Forest\n"
-        f"  MAE:   ${rf_m['MAE']:.2f}\n"
-        f"  RMSE: ${rf_m['RMSE']:.2f}\n"
-        f"  R²:      {rf_m['R2']:.4f}\n"
-        f"\n"
+        f"  MAE:  {rf_r['MAE']:.6f}\n"
+        f"  RMSE: {rf_r['RMSE']:.6f}\n"
+        f"  R2:   {rf_r['R2']:.4f}\n\n"
         f"Linear Regression\n"
-        f"  MAE:   ${lr_m['MAE']:.2f}\n"
-        f"  RMSE: ${lr_m['RMSE']:.2f}\n"
-        f"  R²:      {lr_m['R2']:.4f}"
+        f"  MAE:  {lr_r['MAE']:.6f}\n"
+        f"  RMSE: {lr_r['RMSE']:.6f}\n"
+        f"  R2:   {lr_r['R2']:.4f}"
     )
-
-    # Position the text box in the lower left of the bottom plot (away from data)
     props = dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='gray', alpha=0.9)
-    ax2.text(0.02, 0.02, metrics_text, transform=ax2.transAxes, fontsize=9,
+    ax2.text(0.02, 0.02, metrics_text, transform=ax2.transAxes, fontsize=8,
              verticalalignment='bottom', horizontalalignment='left',
              bbox=props, fontfamily='monospace')
 
@@ -150,7 +167,7 @@ def run():
 
     # ── Section 7: Feature Importance ───────────────────────
     importances = rf.feature_importances_
-    feat_names = X.columns.tolist()
+    feat_names  = X.columns.tolist()
 
     feat_df = pd.DataFrame({'Feature': feat_names, 'Importance': importances})
     feat_df = feat_df.sort_values('Importance', ascending=False).head(10)
