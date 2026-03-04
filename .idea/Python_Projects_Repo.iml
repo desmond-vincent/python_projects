@@ -3,8 +3,9 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/compsci/gold_preds/.venv" />
+      <excludeFolder url="file://$MODULE_DIR$/compsci/rl_agent_trading/.venv" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.12 virtualenv at ~/Documents/COMPSCI/Python/Python_Projects_Repo/compsci/gold_preds/.venv (2)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.12 (Python_Projects_Repo)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
