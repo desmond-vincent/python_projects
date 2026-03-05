@@ -19,7 +19,6 @@ import torch.optim as optim
 from collections import deque
 import random
 import warnings
-
 warnings.filterwarnings('ignore')
 
 
@@ -363,8 +362,8 @@ def generate_synthetic_stock_data(n_days=1000, seed=42):
     np.random.seed(seed)
 
     # Generate price using geometric Brownian motion with mean reversion
-    dt = 1 / 252  # Daily timestep
-    mu = 0.08  # Annual drift
+    dt = 1/252  # Daily timestep
+    mu = 0.08   # Annual drift
     sigma = 0.20  # Annual volatility
 
     prices = [100.0]  # Starting price
@@ -633,7 +632,7 @@ def plot_evaluation_results(env, eval_results, save_path='evaluation_results.png
 
     stats_text = (
         f"Evaluation Summary ({len(eval_results)} Episodes)\n"
-        f"{'=' * 40}\n\n"
+        f"{'='*40}\n\n"
         f"Average Return:     {np.mean(returns):>8.2f}%\n"
         f"Best Return:        {np.max(returns):>8.2f}%\n"
         f"Worst Return:       {np.min(returns):>8.2f}%\n"
@@ -658,7 +657,7 @@ def plot_evaluation_results(env, eval_results, save_path='evaluation_results.png
 # SECTION 8: MAIN EXECUTION
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def main():
+def run():
     """Main function to run the trading agent."""
     print("=" * 70)
     print("TradeMaster - Deep Q-Network Trading Agent")
@@ -732,4 +731,4 @@ def main():
 
 
 if __name__ == "__main__":
-    agent, history, eval_results = main()
+    agent, history, eval_results = run()
