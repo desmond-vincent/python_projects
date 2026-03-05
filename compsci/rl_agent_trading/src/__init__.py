@@ -4,8 +4,8 @@ TradeMaster - Deep Q-Network Trading Agent
 A reinforcement learning agent that learns to make buy/sell/hold decisions
 in a simulated stock trading environment using Deep Q-Networks (DQN).
 
-Author: Student
-Course: Reinforcement Learning Assignment
+Author: Desmond Vincent
+Course: Computer Science 311 - Assignment 3: Developing a Reinforcement Learning Agent
 """
 
 import numpy as np
@@ -22,9 +22,8 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 1: CUSTOM TRADING ENVIRONMENT
-# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Section 1: CUSTOM TRADING ENVIRONMENT ──────────────────────────
 
 class StockTradingEnv(gym.Env):
     """
@@ -147,9 +146,7 @@ class StockTradingEnv(gym.Env):
               f"Shares: {self.shares_held} | Portfolio: ${portfolio_value:.2f}")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 2: DEEP Q-NETWORK ARCHITECTURE
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Section 2: DEEP Q-NETWORK ARCHITECTURE ──────────────────────────
 
 class DQN(nn.Module):
     """
@@ -194,9 +191,7 @@ class DQN(nn.Module):
         return q_values
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 3: REPLAY BUFFER
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Section 3: REPLAY BUFFER ──────────────────────────
 
 class ReplayBuffer:
     """
@@ -228,9 +223,7 @@ class ReplayBuffer:
         return len(self.buffer)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 4: DQN AGENT
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Section 4: DQN AGENT ──────────────────────────
 
 class DQNAgent:
     """
@@ -349,9 +342,7 @@ class DQNAgent:
         self.epsilon = checkpoint['epsilon']
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 5: DATA GENERATION AND PREPROCESSING
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Section 5: DATA GENERATION AND PREPROCESSING ──────────────────────────
 
 def generate_synthetic_stock_data(n_days=1000, seed=42):
     """
@@ -435,9 +426,7 @@ def add_technical_indicators(df):
     return df
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 6: TRAINING FUNCTION
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Section 6: TRAINING FUNCTION ──────────────────────────
 
 def train_agent(env, agent, n_episodes=200, verbose=True):
     """
@@ -498,9 +487,7 @@ def train_agent(env, agent, n_episodes=200, verbose=True):
     }
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 7: EVALUATION AND VISUALIZATION
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Section 7: EVALUATION AND VISUALIZATION ──────────────────────────
 
 def evaluate_agent(env, agent, n_episodes=10):
     """Evaluate trained agent performance."""
@@ -593,13 +580,22 @@ def plot_evaluation_results(env, eval_results, save_path='evaluation_results.png
     best_idx = np.argmax([r['total_return'] for r in eval_results])
     best_result = eval_results[best_idx]
 
+    # Calculate profit metrics
+    initial_balance = 10000
+    profits = [r['final_value'] - initial_balance for r in eval_results]
+    avg_profit = np.mean(profits)
+    best_profit = np.max(profits)
+    worst_profit = np.min(profits)
+    total_profit_all_episodes = np.sum(profits)
+
     ax1 = axes[0, 0]
     ax1.plot(best_result['portfolio_history'], color='green', linewidth=2)
-    ax1.axhline(y=10000, color='red', linestyle='--', label='Initial Balance', alpha=0.7)
+    ax1.axhline(y=initial_balance, color='red', linestyle='--', label='Initial Balance', alpha=0.7)
     ax1.fill_between(range(len(best_result['portfolio_history'])),
-                     10000, best_result['portfolio_history'],
+                     initial_balance, best_result['portfolio_history'],
                      alpha=0.3, color='green' if best_result['total_return'] > 0 else 'red')
-    ax1.set_title(f'Best Episode Portfolio Trajectory (Return: {best_result["total_return"]:.2f}%)', fontsize=12)
+    best_profit_display = best_result['final_value'] - initial_balance
+    ax1.set_title(f'Best Episode Portfolio (Return: {best_result["total_return"]:.2f}% | Profit: ${best_profit_display:.2f})', fontsize=12)
     ax1.set_xlabel('Trading Day')
     ax1.set_ylabel('Portfolio Value ($)')
     ax1.legend()
@@ -626,23 +622,30 @@ def plot_evaluation_results(env, eval_results, save_path='evaluation_results.png
     ax3.legend()
     ax3.grid(True, alpha=0.3)
 
-    # Summary statistics
+    # Summary statistics with profit
     ax4 = axes[1, 1]
     ax4.axis('off')
 
     stats_text = (
         f"Evaluation Summary ({len(eval_results)} Episodes)\n"
         f"{'='*40}\n\n"
-        f"Average Return:     {np.mean(returns):>8.2f}%\n"
-        f"Best Return:        {np.max(returns):>8.2f}%\n"
-        f"Worst Return:       {np.min(returns):>8.2f}%\n"
-        f"Std Dev:            {np.std(returns):>8.2f}%\n"
-        f"Win Rate:           {sum(1 for r in returns if r > 0) / len(returns) * 100:>8.1f}%\n\n"
-        f"Average Final Value: ${np.mean([r['final_value'] for r in eval_results]):>10.2f}\n"
-        f"Average Trades:      {np.mean([r['num_trades'] for r in eval_results]):>10.1f}"
+        f"RETURNS\n"
+        f"  Average Return:     {np.mean(returns):>8.2f}%\n"
+        f"  Best Return:        {np.max(returns):>8.2f}%\n"
+        f"  Worst Return:       {np.min(returns):>8.2f}%\n"
+        f"  Std Dev:            {np.std(returns):>8.2f}%\n"
+        f"  Win Rate:           {sum(1 for r in returns if r > 0) / len(returns) * 100:>8.1f}%\n\n"
+        f"PROFIT/LOSS\n"
+        f"  Average Profit:    ${avg_profit:>10.2f}\n"
+        f"  Best Profit:       ${best_profit:>10.2f}\n"
+        f"  Worst Profit:      ${worst_profit:>10.2f}\n"
+        f"  Total (all eps):   ${total_profit_all_episodes:>10.2f}\n\n"
+        f"TRADING\n"
+        f"  Avg Final Value:   ${np.mean([r['final_value'] for r in eval_results]):>10.2f}\n"
+        f"  Average Trades:    {np.mean([r['num_trades'] for r in eval_results]):>10.1f}"
     )
 
-    ax4.text(0.1, 0.5, stats_text, transform=ax4.transAxes, fontsize=12,
+    ax4.text(0.1, 0.5, stats_text, transform=ax4.transAxes, fontsize=11,
              verticalalignment='center', fontfamily='monospace',
              bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgray', alpha=0.8))
     ax4.set_title('Performance Statistics', fontsize=12)
@@ -653,9 +656,7 @@ def plot_evaluation_results(env, eval_results, save_path='evaluation_results.png
     print(f"Evaluation results saved to {save_path}")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 8: MAIN EXECUTION
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Section 8: MAIN EXECUTION ──────────────────────────
 
 def run():
     """Main function to run the trading agent."""
